@@ -1,0 +1,61 @@
+name: Telegram Notifications & Docker Build
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches:
+      - main
+
+jobs:
+  telegram-notification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx (if needed)
+        if: github.event_name == 'push'
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image (if needed)
+        if: github.event_name == 'push'
+        run: |
+          IMAGE_TAG="ghcr.io/Grycccry13/your-docker-app:latest"
+          docker buildx build --platform linux/amd64 -t "${IMAGE_TAG}" .
+          echo "::set-output name=image_tag::${IMAGE_TAG}"
+
+      - name: Authenticate with GHCR (if needed)
+        if: github.event_name == 'push'
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+
+      - name: Push Docker image (if needed)
+        if: github.event_name == 'push' && steps.Build_Docker_image.outcome == 'success'
+        run: |
+          docker push ${{ steps.Build_Docker_image.outputs.image_tag }}
+          echo "Docker image pushed successfully!"
+
+      - name: Send Telegram notification
+        uses: appleboy/telegram-action@master
+        with:
+          token: ${{ secrets.7059037869:AAG_QV0xD08uGCXHepnJssKLBtMyN-Jcku8 }}
+          chat_id: 7059037869 
+          parse_mode: Markdown
+          message: |
+            *GitHub Event:* ${{ github.event_name }}
+            *Repository:* ${{ github.repository }}
+            *Branch:* ${{ github.ref }}
+            *Actor:* ${{ github.actor }}
+            *Pull Request:* ${{ github.event.pull_request.html_url || 'N/A' }}  
+
+            {% if github.event_name == 'push' %}
+            *Docker Build Result:* {% if steps.Build_Docker_image.outcome == 'success' %}Success!{% else %}Failure!{% endif %}
+            {% if steps.Build_Docker_image.outcome == 'success' and steps.Push_Docker_image.outcome == 'success' %}
+              Docker image pushed successfully!
+            {% endif %}
+            {% endif %}
